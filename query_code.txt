@@ -1,0 +1,20 @@
+let
+    Source = Excel.CurrentWorkbook(){[Name="Table1"]}[Content],
+    #"Type modifié" = Table.TransformColumnTypes(Source,{{"Document No.", type text}, {"Document Title", type text}, {"Document Submittal", Int64.Type}, {"Vendor Document Number", type any}, {"Vendor Document Rev", type any}, {"Transmittal No.", type text}, {"PO No./Title", type text}, {"Vendor/Contractor", type text}, {"SLIStatus/ Transmittal Level", type text}, {"Document Status", type text}, {"Required Date", type datetime}, {"Delay", Int64.Type}, {"Approval Date", type datetime}, {"Sub Area", type text}, {"Transmittal Lead(s)", type text}, {"Transmittal Lead(s) Add Domain", type text}, {"Pay Items / Transmittal Level", type text}, {"SBS / Transmittal Level", type text}, {"NouvLR Drawing No.", type any}, {"Document Type", type text}, {"Received Date", type datetime}, {"Date Created", type datetime}, {"Responsibility", type text}}),
+    #"Filtrer documents pertinents" = Table.SelectRows(#"Type modifié", each not Text.StartsWith([#"Document No."], "602024-003311-OP-Q") and not Text.StartsWith([#"Document No."], "602024-003311-OP-S")),
+    #"Formater Vendor Number" = Table.TransformColumnTypes(#"Filtrer documents pertinents",{{"Vendor Document Number", type text}}),
+    #"Filtrer project number" = Table.SelectRows(#"Formater Vendor Number", each Text.StartsWith([Vendor Document Number], "237305")),
+    #"Fractionner Vendor Number1" = Table.SplitColumn(#"Filtrer project number", "Vendor Document Number", Splitter.SplitTextByPositions({0, 6}, false), {"Vendor Document Number.1", "Vendor Document Number.2"}),
+    #"Type modifié1" = Table.TransformColumnTypes(#"Fractionner Vendor Number1",{{"Vendor Document Number.1", Int64.Type}, {"Vendor Document Number.2", type text}}),
+    #"Fractionner Vendor Number2" = Table.SplitColumn(#"Type modifié1", "Vendor Document Number.2", Splitter.SplitTextByPositions({0, 4}, false), {"Vendor Document Number.2.1", "Vendor Document Number.2.2"}),
+    #"Fractionner Doc No" = Table.SplitColumn(#"Fractionner Vendor Number2", "Document No.", Splitter.SplitTextByDelimiter("_", QuoteStyle.Csv), {"Document No..1", "Document No..2"}),
+    #"Type modifié3" = Table.TransformColumnTypes(#"Fractionner Doc No",{{"Document No..1", type text}, {"Document No..2", type text}}),
+    #"Suppression pdf" = Table.ReplaceValue(#"Type modifié3",".pdf","",Replacer.ReplaceText,{"Document No..2"}),
+    #"Ordre decroissant revision" = Table.Buffer(Table.Sort(#"Suppression pdf",{{"Document No..2", Order.Descending}})),
+    #"Doublons supprimés" = Table.Distinct(#"Ordre decroissant revision", {"Document No..1"}),
+    #"Colonnes fusionnées" = Table.CombineColumns(#"Doublons supprimés",{"Document No..1", "Document No..2"},Combiner.CombineTextByDelimiter("_", QuoteStyle.None),"Document No."),
+    #"Separer francais" = Table.SplitColumn(#"Colonnes fusionnées", "Vendor Document Number.2.2", Splitter.SplitTextByDelimiter("_", QuoteStyle.Csv), {"Vendor Document Number.2.2.1", "Vendor Document Number.2.2.2"}),
+    #"NA pour anglais" = Table.ReplaceValue(#"Separer francais",null,"N/A",Replacer.ReplaceValue,{"Vendor Document Number.2.2.2"}),
+    #"Colonnes renommées" = Table.RenameColumns(#"NA pour anglais",{{"Vendor Document Number.2.2.2", "French"}, {"Vendor Document Number.2.2.1", "Vendor Number"}, {"Vendor Document Number.2.1", "Sector Number"}, {"Vendor Document Number.1", "Project Number"}})
+in
+    #"Colonnes renommées"
